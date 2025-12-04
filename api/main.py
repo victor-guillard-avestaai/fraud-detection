@@ -13,6 +13,8 @@ from internalpy.log import get_logger
 _VARS = load_vars()
 _LOGGER = get_logger(_VARS.Platform)
 
+# Test
+
 app = FastAPI(
     title='Fraud Detection API',
     version='0.1.0',
