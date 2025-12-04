@@ -1,0 +1,17 @@
+# Dockerfile.dev (local dev image with hot reload + dev deps)
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm
+
+WORKDIR /app
+
+# Only copy manifests for dependency layer
+COPY pyproject.toml uv.lock ./
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --extra dev
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# In dev, we'll mount the local source tree into /app, so no COPY here.
+EXPOSE 8080
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]

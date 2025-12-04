@@ -1,0 +1,8 @@
+PROJECT_ID="fraud-detection-480211"
+gcloud config set project "$PROJECT_ID"
+
+gcloud services enable \
+  run.googleapis.com \
+  artifactregistry.googleapis.com \
+  bigquery.googleapis.com \
+  secretmanager.googleapis.com

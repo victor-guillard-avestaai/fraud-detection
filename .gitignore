@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.dist/
+build/
+dist/
+
+# Virtual envs
+.venv/
+.envrc
+
+# uv / tools
+.uv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Editors / IDEs
+.vscode/
+.idea/
+
+# Local env / secrets
+.env
+.env.*
+ci-key.json
+
+# Jupyter
+*.ipynb_checkpoints/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# Logs
+logs/
+*.log
+
+# Model artifacts
+model/artifacts/*
+!model/artifacts/.gitkeep

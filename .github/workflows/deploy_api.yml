@@ -1,0 +1,62 @@
+name: Deploy Fraud API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "internalpy/**"
+      - "model/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/deploy_api.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: us-central1
+      ARTIFACT_REPO: docker-registry
+      SERVICE_NAME: fraud-detector-api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: "${{ secrets.GCP_CREDS }}"
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker $GCP_REGION-docker.pkg.dev
+
+      - name: Build & push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.SERVICE_NAME }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE_NAME" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REPO/$SERVICE_NAME:${GITHUB_SHA}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account "${{ secrets.GCP_RUN_SA_EMAIL }}" \
+            --set-env-vars "PROJECT_ID=$GCP_PROJECT_ID,BQ_DATASET=fraud,BQ_TABLE_PREDICTIONS=predictions,MODEL_PATH=/app/model/artifacts/model.joblib,PLATFORM=prod" \
+            --set-secrets "INTERNAL_AUTH_TOKEN=INTERNAL_AUTH_TOKEN:latest"
