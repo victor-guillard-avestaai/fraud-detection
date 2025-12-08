@@ -1,0 +1,95 @@
+{
+  "model_type": "xgboost",
+  "model_version": "20251208_162727",
+  "features": [
+    "Time",
+    "V1",
+    "V2",
+    "V3",
+    "V4",
+    "V5",
+    "V6",
+    "V7",
+    "V8",
+    "V9",
+    "V10",
+    "V11",
+    "V12",
+    "V13",
+    "V14",
+    "V15",
+    "V16",
+    "V17",
+    "V18",
+    "V19",
+    "V20",
+    "V21",
+    "V22",
+    "V23",
+    "V24",
+    "V25",
+    "V26",
+    "V27",
+    "V28",
+    "Amount"
+  ],
+  "train_rows": 170884,
+  "val_rows": 56961,
+  "test_rows": 56962,
+  "class_ratio_train": 0.002111139780910605,
+  "cost_matrix": {
+    "FN": 1.0,
+    "FP": 0.05
+  },
+  "threshold": 0.044088176352705406,
+  "metrics": {
+    "validation": {
+      "expected_cost": 0.00023349309176454066,
+      "precision": 0.6338028169014085,
+      "recall": 0.7894736842105263,
+      "f1": 0.703125,
+      "tp": 45,
+      "fp": 26,
+      "tn": 56878,
+      "fn": 12,
+      "pr_auc": 0.7883150587037111,
+      "roc_auc": 0.9825566481929553,
+      "precision_at_k": 0.45,
+      "k_value": 100
+    },
+    "test": {
+      "expected_cost": 0.00030458902426178856,
+      "precision": 0.686046511627907,
+      "recall": 0.7866666666666666,
+      "f1": 0.7329192546583851,
+      "tp": 59,
+      "fp": 27,
+      "tn": 56860,
+      "fn": 16,
+      "pr_auc": 0.7856295889767189,
+      "roc_auc": 0.9774350320225476,
+      "precision_at_k": 0.59,
+      "k_value": 100
+    },
+    "validation_threshold_free": {
+      "pr_auc": 0.7883150587037111,
+      "roc_auc": 0.9825566481929553,
+      "precision_at_k": 0.45,
+      "k_value": 100
+    }
+  },
+  "xgb_params": {
+    "n_estimators": 400,
+    "learning_rate": 0.1,
+    "max_depth": 7,
+    "subsample": 0.8,
+    "colsample_bytree": 0.9,
+    "min_child_weight": 10
+  },
+  "baseline_logreg": {
+    "val_pr_auc": 0.649334961179701,
+    "val_roc_auc": 0.9684627356384776,
+    "test_pr_auc": 0.694353673660478,
+    "test_roc_auc": 0.9724089276401757
+  }
+}
