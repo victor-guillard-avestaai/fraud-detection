@@ -130,6 +130,6 @@ def log_prediction_to_bq(record: dict[str, Any]) -> None:
     try:
         errors = client.insert_rows_json(table_id, [row])
         if errors:
-            logger.error('BigQuery insert error', extra={'errors': errors})
+            logger.error('BigQuery insert error: %s', errors)
     except Exception:
         logger.exception('Failed to insert prediction log into BigQuery')
