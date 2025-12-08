@@ -13,6 +13,9 @@ dist/
 .venv/
 .envrc
 
+# Data
+data/
+
 # uv / tools
 .uv/
 .ruff_cache/

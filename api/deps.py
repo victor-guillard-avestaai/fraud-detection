@@ -1,9 +1,25 @@
 # api/deps.py
 from __future__ import annotations
 
+import json
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import lru_cache
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from google.cloud import bigquery
+
+import joblib
 
 from internalpy.config import Cfg, build_cfg
+
+logger = logging.getLogger(__name__)
+
+
+# ----- Config dependency -----
 
 
 @lru_cache(maxsize=1)
@@ -16,3 +32,104 @@ def get_cfg() -> Cfg:
     FastAPI dependency to access the global, immutable configuration.
     """
     return _load_cfg()
+
+
+# ----- Model loading -----
+
+
+@dataclass(frozen=True)
+class ModelBundle:
+    pipeline: Any
+    metadata: dict[str, Any]
+
+
+def _resolve_model_and_metadata_paths(cfg: Cfg) -> tuple[Path, Path]:
+    """
+    Resolve model and metadata paths.
+
+    - If ModelPath is absolute, use it as-is.
+    - If it's relative, resolve it from project root (parent of api/).
+    """
+    raw_model_path = Path(cfg.Vars.ModelPath)
+
+    if raw_model_path.is_absolute():
+        model_path = raw_model_path
+    else:
+        project_root = Path(__file__).resolve().parents[1]
+        model_path = project_root / raw_model_path
+
+    metadata_path = model_path.with_name('metadata.json')
+    return model_path, metadata_path
+
+
+@lru_cache(maxsize=1)
+def get_model_bundle() -> ModelBundle:
+    """
+    Load the trained model pipeline and metadata.json once and cache them.
+    """
+    cfg = get_cfg()
+    model_path, metadata_path = _resolve_model_and_metadata_paths(cfg)
+
+    if not model_path.exists():
+        raise RuntimeError(f'Model artifact not found at {model_path}')
+
+    if not metadata_path.exists():
+        raise RuntimeError(f'Metadata file not found at {metadata_path}')
+
+    logger.info('Loading model from %s', model_path)
+    pipeline = joblib.load(model_path)
+
+    logger.info('Loading metadata from %s', metadata_path)
+    with metadata_path.open('r', encoding='utf-8') as f:
+        metadata = json.load(f)
+
+    return ModelBundle(pipeline=pipeline, metadata=metadata)
+
+
+# ----- BigQuery logging -----
+
+
+@lru_cache(maxsize=1)
+def get_bq_client(project_id: str) -> bigquery.Client:
+    """
+    Lazily create a BigQuery client. Not used in 'loc' platform.
+    """
+    from google.cloud import bigquery  # runtime import
+
+    return bigquery.Client(project=project_id)
+
+
+def log_prediction_to_bq(record: dict[str, Any]) -> None:
+    """
+    Best-effort logging of predictions to BigQuery.
+
+    In 'loc' platform, we skip logging entirely.
+
+    Expected record keys:
+      - 'fraud_prob'
+      - 'fraud_flag'
+      - 'model_version'
+      - 'Time', 'Amount' (optional but nice)
+    """
+    cfg = get_cfg()
+
+    if cfg.Vars.Platform == 'loc':
+        # Don't hit BigQuery from local dev / tests
+        logger.info('Skipping BigQuery logging on local platform')
+        return
+
+    table_id = f'{cfg.Vars.ProjectID}.' f'{cfg.Vars.BQDataset}.' f'{cfg.Vars.BQTablePredictions}'
+
+    client = get_bq_client(cfg.Vars.ProjectID)
+
+    row = {
+        **record,
+        'prediction_timestamp': datetime.now(UTC).isoformat(),
+    }
+
+    try:
+        errors = client.insert_rows_json(table_id, [row])
+        if errors:
+            logger.error('BigQuery insert error', extra={'errors': errors})
+    except Exception:
+        logger.exception('Failed to insert prediction log into BigQuery')
