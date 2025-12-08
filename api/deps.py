@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -105,16 +106,16 @@ def log_prediction_to_bq(record: dict[str, Any]) -> None:
 
     In 'loc' platform, we skip logging entirely.
 
-    Expected record keys:
+    record is expected to contain at least:
       - 'fraud_prob'
       - 'fraud_flag'
       - 'model_version'
-      - 'Time', 'Amount' (optional but nice)
+      - 'Amount' (optional, used to populate 'amount')
+      - optionally 'transaction_id' and 'features'
     """
     cfg = get_cfg()
 
     if cfg.Vars.Platform == 'loc':
-        # Don't hit BigQuery from local dev / tests
         logger.info('Skipping BigQuery logging on local platform')
         return
 
@@ -122,14 +123,23 @@ def log_prediction_to_bq(record: dict[str, Any]) -> None:
 
     client = get_bq_client(cfg.Vars.ProjectID)
 
+    # Map our internal record -> BigQuery schema
     row = {
-        **record,
-        'prediction_timestamp': datetime.now(UTC).isoformat(),
+        # BigQuery table schema
+        'timestamp': datetime.now(UTC).isoformat(),
+        'transaction_id': record.get('transaction_id') or str(uuid.uuid4()),
+        'amount': float(record.get('Amount', 0.0)),
+        # You can stick features in here later (e.g. JSON string) if you want.
+        'features': record.get('features'),
+        'model_version': str(record.get('model_version', '')),
+        'fraud_prob': float(record.get('fraud_prob', 0.0)),
+        'fraud_flag': bool(record.get('fraud_flag', False)),
     }
 
     try:
         errors = client.insert_rows_json(table_id, [row])
         if errors:
+            # Log actual errors so we can debug future issues
             logger.error('BigQuery insert error: %s', errors)
     except Exception:
         logger.exception('Failed to insert prediction log into BigQuery')
