@@ -395,3 +395,21 @@ Then visit:
   - discussion of resampling and cost-sensitive training trade-offs.
 
 - Kaggle, _Credit Card Fraud Detection_ dataset (European card transactions).
+
+## 11. Limitations & Future Work
+
+**Current limitations**
+
+- **Public benchmark dataset only.** The project uses the Kaggle “Credit Card Fraud Detection” dataset, which is anonymized, static, and limited to a single geography and time period. Real-world fraud systems use richer features (device, merchant, geography, customer history) and must handle continuous data ingestion.
+- **Transaction-level features only.** The model uses `Time`, `Amount`, and `V1`–`V28` as-is. There is no explicit customer-, card-, or terminal-level feature engineering (e.g. rolling counts, RFM-style aggregates, velocity features).
+- **One-shot training, no automated retraining.** The pipeline trains models offline and bakes artifacts into the image. There is no scheduled retraining, model registry, or promotion workflow.
+- **Limited monitoring.** Predictions are logged to a single BigQuery table, but there is no full monitoring stack yet (alerts, dashboards for PR-AUC over time, drift alerts, calibration checks).
+- **Simplified cost model.** The cost-sensitive decision rule uses a constant FN and FP cost. In practice, costs depend on transaction amount, customer type, and operational constraints.
+
+**Future work**
+
+- **Richer feature engineering.** Add card/customer/terminal-level rolling features (e.g. number of transactions in the last hour/day, total spend, merchant diversity, distance between locations) and compare their impact on PR-AUC and Precision@Top-k.
+- **Production-grade retraining loop.** Move from one-shot training to a scheduled retraining pipeline (e.g. Cloud Run jobs / Cloud Composer) with model versioning, validation reports, and safe promotion to production.
+- **Concept drift & data quality monitoring.** Track feature distributions, base fraud rate, and key metrics (PR-AUC, Precision@Top-k, calibration) over time, and trigger alerts when they move too far from the reference period.
+- **More realistic cost modelling.** Make the cost function depend on transaction amount and context (e.g. higher FN cost for large amounts), and compare decision thresholds under different business scenarios.
+- **Alternative models.** Explore sequence-based (RNN/Transformer) or graph-based models that can explicitly model card–merchant–device networks, and compare them to XGBoost in terms of performance and operational complexity.
