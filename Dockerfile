@@ -14,7 +14,9 @@ COPY internalpy/ /app/internalpy/
 COPY api/        /app/api/
 # Model artifacts baked into the image (small files only)
 COPY model/artifacts/ /app/model/artifacts/
-
+COPY model/demo_samples.json /app/model/demo_samples.json
+# Static demo UI
+COPY static/ /app/static/
 ENV PATH="/app/.venv/bin:${PATH}"
 
 EXPOSE 8080
