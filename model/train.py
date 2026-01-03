@@ -35,6 +35,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = PROJECT_ROOT / 'data' / 'raw' / 'creditcard.csv'
 ARTIFACT_DIR = PROJECT_ROOT / 'model' / 'artifacts'
 ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+DEMO_SAMPLES_PATH = PROJECT_ROOT / 'model' / 'demo_samples.json'
 
 
 # --------- Utilities ---------
@@ -266,6 +267,63 @@ def random_search_xgb(
     return best_pipeline, best_params, best_metrics
 
 
+def export_demo_samples(
+    test_df: pd.DataFrame,
+    feature_cols: list[str],
+    target_col: str,
+    output_path: Path = DEMO_SAMPLES_PATH,
+    max_fraud: int = 50,
+    max_nonfraud: int = 200,
+) -> None:
+    """
+    Export a small set of demo samples from the test set to JSON.
+
+    Each sample contains:
+      - id: "fraud_001", "genuine_001", ...
+      - class: 1 (fraud) or 0 (genuine)
+      - features: full feature dict (Time, V1..V28, Amount)
+    """
+    fraud_df = test_df[test_df[target_col] == 1].copy()
+    nonfraud_df = test_df[test_df[target_col] == 0].copy()
+
+    fraud_df = fraud_df.head(max_fraud)
+    nonfraud_df = nonfraud_df.head(max_nonfraud)
+
+    samples: list[dict[str, Any]] = []
+
+    fraud_counter = 0
+    for _, row in fraud_df.iterrows():
+        fraud_counter += 1
+        features = {col: float(row[col]) for col in feature_cols}
+        samples.append(
+            {
+                'id': f'fraud_{fraud_counter:03d}',
+                'label': f'Fraud example {fraud_counter}',
+                'class': 1,
+                'features': features,
+            }
+        )
+
+    genuine_counter = 0
+    for _, row in nonfraud_df.iterrows():
+        genuine_counter += 1
+        features = {col: float(row[col]) for col in feature_cols}
+        samples.append(
+            {
+                'id': f'genuine_{genuine_counter:03d}',
+                'label': f'Genuine example {genuine_counter}',
+                'class': 0,
+                'features': features,
+            }
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open('w', encoding='utf-8') as f:
+        json.dump(samples, f, indent=2)
+
+    print(f'[Demo] Exported {len(samples)} demo samples to {output_path}')
+
+
 # --------- Metadata structures ---------
 
 
@@ -334,6 +392,8 @@ def main() -> None:
 
     X_test = cast(pd.DataFrame, test_df[feature_cols])
     y_test = np.asarray(test_df[target_col].values.astype(int))
+
+    export_demo_samples(test_df, feature_cols, target_col)
 
     n_train, n_val, n_test = len(train_df), len(val_df), len(test_df)
     n_pos_train = int(np.sum(y_train == 1))

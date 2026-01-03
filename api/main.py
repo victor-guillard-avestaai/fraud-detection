@@ -3,12 +3,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from fastapi import Depends, FastAPI
+from fastapi.staticfiles import StaticFiles
 
-from api.deps import get_cfg, get_model_bundle, log_prediction_to_bq
+from api.deps import get_cfg, get_demo_samples, get_model_bundle, log_prediction_to_bq
 from api.schemas import HealthResponse, PredictionResponse, TransactionInput
 from internalpy.config import Cfg, load_vars
 from internalpy.log import get_logger
@@ -65,6 +67,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+
+app.mount(
+    '/demo',
+    StaticFiles(directory=BASE_DIR / 'static' / 'demo', html=True),
+    name='demo',
+)
+
 
 @app.get('/health', response_model=HealthResponse, tags=['meta'])
 def health(cfg: Cfg = Depends(get_cfg)) -> HealthResponse:
@@ -88,6 +98,14 @@ def health(cfg: Cfg = Depends(get_cfg)) -> HealthResponse:
         bq_table_predictions=cfg.Vars.BQTablePredictions,
         model_path=cfg.Vars.ModelPath,
     )
+
+
+@app.get('/demo-samples', tags=['demo'])
+def demo_samples() -> list[dict]:
+    """
+    Return a small set of demo samples from the test set.
+    """
+    return get_demo_samples()
 
 
 @app.post('/predict', response_model=PredictionResponse, tags=['inference'])

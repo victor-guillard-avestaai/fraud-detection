@@ -87,6 +87,37 @@ def get_model_bundle() -> ModelBundle:
     return ModelBundle(pipeline=pipeline, metadata=metadata)
 
 
+@lru_cache(maxsize=1)
+def get_demo_samples() -> list[dict[str, Any]]:
+    """
+    Load demo samples (exported from the test set) from model/demo_samples.json.
+
+    Returns a list of:
+      {
+        "id": str,
+        "label": str,
+        "class": 0 or 1,
+        "features": { "Time": ..., "V1": ..., ..., "Amount": ... }
+      }
+    """
+    cfg = get_cfg()
+    model_path, _ = _resolve_model_and_metadata_paths(cfg)
+    demo_path = model_path.parents[1] / 'demo_samples.json'  # /app/model/demo_samples.json
+
+    if not demo_path.exists():
+        logger.warning('No demo_samples.json found at %s', demo_path)
+        return []
+
+    with demo_path.open('r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        logger.warning('demo_samples.json content is not a list')
+        return []
+
+    return data
+
+
 # ----- BigQuery logging -----
 
 

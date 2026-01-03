@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Fraud Detection Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 40px auto;
+            padding: 24px;
+            background: #020617;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            border: 1px solid #1f2937;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.6rem;
+            color: #f9fafb;
+        }
+
+        p {
+            margin-top: 0;
+            color: #9ca3af;
+        }
+
+        .field {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+            color: #d1d5db;
+        }
+
+        select,
+        input {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #4b5563;
+            background: #020617;
+            color: #e5e7eb;
+            font-size: 0.95rem;
+        }
+
+        input::placeholder {
+            color: #6b7280;
+        }
+
+        button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 0.95rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            background: #2563eb;
+            color: #f9fafb;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .row .col {
+            flex: 1 1 0;
+            min-width: 120px;
+        }
+
+        .result-card {
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 8px;
+            background: #020617;
+            border: 1px solid #374151;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
+        .badge-fraud {
+            background: #b91c1c;
+            color: #fee2e2;
+        }
+
+        .badge-genuine {
+            background: #16a34a;
+            color: #dcfce7;
+        }
+
+        .badge-info {
+            background: #1f2937;
+            color: #e5e7eb;
+        }
+
+        .prob {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .muted {
+            font-size: 0.85rem;
+            color: #9ca3af;
+        }
+
+        .error {
+            margin-top: 12px;
+            color: #fecaca;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Credit Card Fraud Detection – Demo</h1>
+        <p>
+            Pick a real transaction from the test set (fraudulent or genuine), optionally tweak the amount and time,
+            and see how the model classifies it.
+        </p>
+
+        <div class="field">
+            <label for="sample-select">Sample transaction</label>
+            <select id="sample-select" disabled>
+                <option value="">Loading samples…</option>
+            </select>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <div class="field">
+                    <label for="amount-input">Amount</label>
+                    <input id="amount-input" type="number" step="0.01" />
+                </div>
+            </div>
+            <div class="col">
+                <div class="field">
+                    <label for="time-input">Time (seconds since dataset start)</label>
+                    <input id="time-input" type="number" step="1" />
+                </div>
+            </div>
+        </div>
+
+        <button id="predict-btn" disabled>Run prediction</button>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="result" class="result-card" style="display: none;">
+            <div>
+                <span class="prob" id="prob-text"></span>
+                <span id="decision-badge" class="badge"></span>
+            </div>
+            <div class="muted" id="threshold-text"></div>
+            <div class="muted" id="true-label-text"></div>
+            <div class="muted" id="confusion-text"></div>
+            <div class="muted" id="meta-text"></div>
+        </div>
+    </div>
+
+    <script>
+        let samples = [];
+        let selectedSample = null;
+
+        async function loadSamples() {
+            try {
+                const res = await fetch("/demo-samples");
+                if (!res.ok) throw new Error("Failed to load demo samples");
+                samples = await res.json();
+                populateSamples();
+            } catch (err) {
+                showError(err.message || String(err));
+            }
+        }
+
+        function populateSamples() {
+            const select = document.getElementById("sample-select");
+            select.innerHTML = "";
+
+            if (!samples.length) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "No demo samples available";
+                select.appendChild(opt);
+                select.disabled = true;
+                document.getElementById("predict-btn").disabled = true;
+                return;
+            }
+
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = "Choose a sample transaction…";
+            select.appendChild(placeholder);
+
+            const fraudGroup = document.createElement("optgroup");
+            fraudGroup.label = "Fraud examples";
+            const genuineGroup = document.createElement("optgroup");
+            genuineGroup.label = "Genuine examples";
+
+            for (const sample of samples) {
+                const opt = document.createElement("option");
+                opt.value = sample.id;
+                const amount = sample.features.Amount.toFixed(2);
+                const time = sample.features.Time.toFixed(0);
+                const prefix = sample.class === 1 ? "Fraud" : "Genuine";
+                opt.textContent = `${prefix}: Amount ${amount}, Time ${time}`;
+                if (sample.class === 1) {
+                    fraudGroup.appendChild(opt);
+                } else {
+                    genuineGroup.appendChild(opt);
+                }
+            }
+
+            if (fraudGroup.children.length) select.appendChild(fraudGroup);
+            if (genuineGroup.children.length) select.appendChild(genuineGroup);
+
+            select.disabled = false;
+            document.getElementById("predict-btn").disabled = false;
+
+            select.addEventListener("change", onSampleChange);
+            document.getElementById("predict-btn").addEventListener("click", onPredictClick);
+        }
+
+        function onSampleChange() {
+            const select = document.getElementById("sample-select");
+            const id = select.value;
+            selectedSample = samples.find(s => s.id === id) || null;
+            if (!selectedSample) return;
+
+            const amountInput = document.getElementById("amount-input");
+            const timeInput = document.getElementById("time-input");
+
+            amountInput.value = selectedSample.features.Amount.toFixed(2);
+            timeInput.value = selectedSample.features.Time.toFixed(0);
+
+            hideError();
+            hideResult();
+        }
+
+        function showError(msg) {
+            const el = document.getElementById("error");
+            el.textContent = msg;
+            el.style.display = "block";
+        }
+
+        function hideError() {
+            const el = document.getElementById("error");
+            el.style.display = "none";
+        }
+
+        function hideResult() {
+            document.getElementById("result").style.display = "none";
+        }
+
+        async function onPredictClick() {
+            hideError();
+            hideResult();
+
+            if (!selectedSample) {
+                showError("Please choose a sample transaction first.");
+                return;
+            }
+
+            const amountInput = document.getElementById("amount-input");
+            const timeInput = document.getElementById("time-input");
+
+            const amount = parseFloat(amountInput.value);
+            const time = parseFloat(timeInput.value);
+
+            if (Number.isNaN(amount) || Number.isNaN(time)) {
+                showError("Please provide valid numeric values for amount and time.");
+                return;
+            }
+
+            const payload = { ...selectedSample.features };
+            payload.Amount = amount;
+            payload.Time = time;
+
+            try {
+                const res = await fetch("/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(`Predict failed: ${res.status} ${text}`);
+                }
+                const data = await res.json();
+                renderResult(data, selectedSample);
+            } catch (err) {
+                showError(err.message || String(err));
+            }
+        }
+
+        function renderResult(prediction, sample) {
+            const resultEl = document.getElementById("result");
+            const probText = document.getElementById("prob-text");
+            const decisionBadge = document.getElementById("decision-badge");
+            const thresholdText = document.getElementById("threshold-text");
+            const trueLabelText = document.getElementById("true-label-text");
+            const confusionText = document.getElementById("confusion-text");
+            const metaText = document.getElementById("meta-text");
+
+            const prob = prediction.fraud_prob;
+            const probPct = (prob * 100).toFixed(2);
+            probText.textContent = `Fraud probability: ${probPct}%`;
+
+            const isFraudPred = !!prediction.fraud_flag;
+            decisionBadge.textContent = isFraudPred ? "FLAGGED AS FRAUD" : "NOT FLAGGED";
+            decisionBadge.className = "badge " + (isFraudPred ? "badge-fraud" : "badge-genuine");
+
+            thresholdText.textContent = `Decision threshold: ${(prediction.threshold * 100).toFixed(2)}%`;
+
+            const trueIsFraud = sample.class === 1;
+            const trueLabelStr = trueIsFraud ? "True label: FRAUD" : "True label: GENUINE";
+            trueLabelText.textContent = trueLabelStr;
+
+            let confusionStr = "This is a ";
+            if (isFraudPred && trueIsFraud) confusionStr += "TRUE POSITIVE (fraud correctly flagged).";
+            else if (isFraudPred && !trueIsFraud) confusionStr += "FALSE POSITIVE (legit transaction flagged).";
+            else if (!isFraudPred && trueIsFraud) confusionStr += "FALSE NEGATIVE (fraud missed).";
+            else confusionStr += "TRUE NEGATIVE (legit transaction not flagged).";
+            confusionText.textContent = confusionStr;
+
+            metaText.textContent = `Model version: ${prediction.model_version}`;
+
+            resultEl.style.display = "block";
+        }
+
+        window.addEventListener("DOMContentLoaded", loadSamples);
+    </script>
+</body>
+
+</html>
