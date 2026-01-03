@@ -13,6 +13,16 @@ Conceptually inspired by **Le Borgne et al., _Reproducible Machine Learning for 
 
 ---
 
+## 🔗 Live Demo
+
+Public demo UI (read-only, no auth):
+
+**https://fraud-detector-api-582389173518.us-central1.run.app/demo**
+
+Pick real test-set transactions (fraud / genuine), tweak amount and time, and see how the model classifies them (with probability, threshold, and TP/FP/TN/FN classification).
+
+---
+
 ## 1. Problem & Dataset
 
 - **Goal:** detect fraudulent credit card transactions.
@@ -88,9 +98,9 @@ For each candidate threshold `t` in `[0, 1]`:
 2. Compute the confusion matrix.
 3. Compute expected cost per transaction:
 
-   \[
-   \text{ExpectedCost}(t) = \frac{C*{FN} \cdot FN(t) + C*{FP} \cdot FP(t)}{N}
-   \]
+   ```text
+   ExpectedCost(t) = (C_FN * FN(t) + C_FP * FP(t)) / N
+   ```
 
 The best threshold is the one minimizing this expected cost on the **validation** set.
 
